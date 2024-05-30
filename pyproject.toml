@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "eedi_piivot"
+version = "0.1.0"
+description = "TBD"
+authors = ["Zent, Matthew"]
+readme = "README.md"
+packages = [
+    {include = "eedi_piivot"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pandas = "^2.2.2"
+numpy = "^1.26.4"
+tqdm = "^4.66.4"
+tensorboard = "^2.16.2"
+wandb = "^0.17.0"
+scikit-learn = "^1.5.0"
+rich = "^13.7.1"
+torch = "^2.2.2"
+transformers = "^4.41.1"
+pydantic = "^2.7.1"

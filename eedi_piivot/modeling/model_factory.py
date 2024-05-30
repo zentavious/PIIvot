@@ -1,0 +1,29 @@
+"""Factory for creating instances of classes based on a string identifier."""
+
+import torch
+
+from transformers import BertForTokenClassification
+
+
+def create_model(model_name: str, from_pretrained: bool = False, *args, **kwargs) -> torch.nn.Module:
+    """Create an model instance from a name and arguments.
+
+    Args:
+        model_name (str): The class name of the model to create.
+
+    Raises:
+        ValueError: If no model is found with the given name.
+
+    Returns:
+        torch.nn.Module: An instance of the model class.
+    """
+    model_classes = {"BERT": BertForTokenClassification}
+
+    model_class = model_classes.get(model_name)
+    if model_class is None:
+        raise ValueError(f"No model found with name {model_name}")
+    
+    if from_pretrained:
+        return model_class.from_pretrained(*args, **kwargs)
+    else:
+        return model_class(*args, **kwargs)
