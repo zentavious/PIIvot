@@ -3,7 +3,7 @@
 import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, PositiveFloat, PositiveInt, confloat, validator
+from pydantic import BaseModel, PositiveFloat, PositiveInt, confloat, field_validator
 
 class BatchParamsConfig(BaseModel):
     batch_size: PositiveInt
@@ -15,19 +15,19 @@ class InputDataConfig(BaseModel):
     header: bool
     processed_date: datetime.date
     split: bool
-    k_folds: Optional[PositiveInt]
+    k_folds: Optional[PositiveInt] = None
     train_split: confloat(ge=0.0, le=1.0)  # type: ignore
     train_params: BatchParamsConfig
     valid_split: Optional[confloat(ge=0.0, le=1.0)]  # type: ignore
     valid_params: BatchParamsConfig
 
-    @validator('valid_split')
+    @field_validator('valid_split')
     def ensure_valid_split(cls, v, values, **kwargs):
         if v is None and values['k_folds'] is None:
             raise KeyError('k_folds or valid_split are required')
 
 class ModelParamsConfig(BaseModel):
-    model_name: Literal["BERT", "DeBERTa"]
+    name: Literal["BERT", "DeBERTa"]
     from_pretrained: bool
     max_len: PositiveInt
 
@@ -37,7 +37,7 @@ class PretrainedModelParamsConfig(BaseModel):
     num_labels: PositiveInt
 
 class ModelConfig(BaseModel):
-    model_params: ModelParamsConfig
+    params: ModelParamsConfig
     pretrained_params: PretrainedModelParamsConfig
 
 class OptimizerParamsConfig(BaseModel):

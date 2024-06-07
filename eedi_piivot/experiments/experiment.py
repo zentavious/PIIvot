@@ -78,12 +78,12 @@ class Experiment:
     def __load_data__(self):
         console.rule("Step 2: Loading the data.")
 
-        self.tokenizer = create_tokenizer(self.config.experiment.model.model_params.model_name, 
-                                          self.config.experiment.model.model_params.from_pretrained, 
+        self.tokenizer = create_tokenizer(self.config.experiment.model.params.name, 
+                                          self.config.experiment.model.params.from_pretrained, 
                                           self.config.experiment.model.pretrained_params.pretrained_model_name_or_path)
         
         # TODO add this to config + factory
-        full_dataset = BERTDialogueDataset(self.config.experiment.model.model_params.max_len, self.tokenizer)
+        full_dataset = BERTDialogueDataset(self.config.experiment.model.params.max_len, self.tokenizer)
         
         train_valid_idx, test_idx = train_test_split(np.arange(len(full_dataset)),
                                                     train_size=self.config.input_data.train_split,

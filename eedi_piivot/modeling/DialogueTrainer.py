@@ -51,11 +51,11 @@ class DialogueTrainer:
 
     def initialize_model(self):
         console.rule(
-            f"Initializing the {self.experiment_config.model.model_params.model_name} model."
+            f"Initializing the {self.experiment_config.model.params.name} model."
         )
         
-        self.model= create_model(self.experiment_config.model.model_params.model_name, 
-                                 self.experiment_config.model.model_params.from_pretrained, 
+        self.model= create_model(self.experiment_config.model.params.name, 
+                                 self.experiment_config.model.params.from_pretrained, 
                                  **self.experiment_config.model.pretrained_params.model_dump())
         
         self.model.to(global_immutable.DEVICE)
@@ -120,8 +120,9 @@ class DialogueTrainer:
                 mask = batch['attention_mask'].to(device, dtype = torch.long)
                 labels = batch['labels'].to(device, dtype = torch.long)
 
-                (loss, tr_logits) = self.model(input_ids=ids, attention_mask=mask, labels=labels)
-
+                outputs = self.model(input_ids=ids, attention_mask=mask, labels=labels)
+                loss, tr_logits = outputs.loss, outputs.logits
+                
                 current_epoch_loss += loss.item()
 
                 nb_tr_steps += 1
@@ -208,7 +209,7 @@ class DialogueTrainer:
                 (metrics, errors) = evaluator.evaluate(
                         self.model,
                         "val",
-                        self.experiment_config.model.model_params.max_len,
+                        self.experiment_config.model.params.max_len,
                         val_dataloader,
                         tracker=self.tracker,
                         cur_epoch=epoch,
