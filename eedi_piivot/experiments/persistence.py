@@ -49,7 +49,7 @@ class Persistence:
         self.resume_checkpoint_filename = resume_checkpoint_filename
         self.exp_dirname = self.get_or_set_experiment_directory(candidate_exp_dirname)
 
-    def get_or_set_experiment_directory(self, candidate_exp_dirname: str) -> Path:
+    def get_or_set_experiment_directory(self, candidate_exp_dirname: str) -> str:
         """Get or set the results directory.
 
         Args:
