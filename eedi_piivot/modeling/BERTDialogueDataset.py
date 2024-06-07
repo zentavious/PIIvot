@@ -3,8 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import Dataset
-from transformers import BertTokenizerFast, BertForTokenClassification
+from collections import Counter
 
 from eedi_piivot.utils.immutable import global_immutable
 from .dialogue_dataset import DialogueDataset
@@ -17,34 +16,42 @@ def extract_flow_id(row):
     meta_data = json.loads(row['example_metadata'])
     return meta_data.get('FlowGeneratorSessionInterventionId', None)
 
-
-
-
 # TODO fix dataset to add encodings + propgate labels at __getitem__??? Refer to tutorial
 class BERTDialogueDataset(DialogueDataset):
-    def __init__(self, max_length):
+    def __init__(self, max_length, tokenizer):
         super().__init__()
-        
-        self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-cased')
+
+        self.tokenizer = tokenizer
         self.max_len = max_length
         self.encode_dataframe()
+        self.assign_minority_labels()
 
-    def assign_labels_bert(self, message, encoding, pos_labels):
+    def assign_minority_labels(self):
+        all_labels = [label for sublist in self.data['encoded_labels'] for label in sublist]
+        label_counts = Counter(all_labels)
+        
+        ordered_labels = [label for label, count in sorted(label_counts.items(), key=lambda item: item[1])]
+
+        self.data['minority_label'] = self.data.apply(lambda row: self.assign_minority_label(row['encoded_labels'], ordered_labels), axis=1)
+
+    def assign_minority_label(self, encoded_labels, ordered_labels):
+        for label in ordered_labels:
+            if label in encoded_labels:
+                return label
+            
+    def assign_labels_bert(self, encoding, pos_labels):
         
         encoded_labels = np.ones(len(encoding["offset_mapping"]), dtype=int) * -100
         
-        # set only labels whose first offset position is 0 and the second is not 0
         for idx, mapping in enumerate(encoding["offset_mapping"]):
             if mapping[0] != mapping[1]:
-                encoded_labels[idx] = global_immutable.LABELS_TO_IDS["O"] # default to no pii
+                encoded_labels[idx] = global_immutable.LABELS_TO_IDS["O"] # default to out
 
                 for start_index, end_index, label_type in pos_labels:
-                    if start_index <= mapping[0] < end_index or start_index <= mapping[1] < end_index:# validate that this inclusive boundary is correct
+                    if start_index <= mapping[0] < end_index or start_index < mapping[1] <= end_index:
                         encoded_labels[idx] = global_immutable.LABELS_TO_IDS[label_type]
                         break
-        
-        # print(tokenizer.convert_ids_to_tokens(encoding.input_ids))
-        
+                
         return encoded_labels
 
     def encode_message(self, message):
@@ -54,10 +61,15 @@ class BERTDialogueDataset(DialogueDataset):
                             truncation=True, 
                             max_length=self.max_len)
         return encoding
+
+    def tokenize_message(self, encoding):
+        tokens = self.tokenizer.convert_ids_to_tokens(encoding['input_ids'])
+        return tokens
     
     def encode_dataframe(self):
         self.data['bert_encoding'] = self.data.apply(lambda row: self.encode_message(row['Message']), axis=1)
-        self.data['encoded_labels']  = self.data.apply(lambda row: self.assign_labels_bert(row['Message'], row['bert_encoding'], row['pos_labels']), axis=1)
+        self.data['encoded_labels'] = self.data.apply(lambda row: self.assign_labels_bert(row['bert_encoding'], row['pos_labels']), axis=1)
+        self.data['tokens'] = self.data.apply(lambda row: self.tokenize_message(row['bert_encoding']), axis=1)
 
     def __getitem__(self, index):
         # step 1: get the encoding and labels 

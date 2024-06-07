@@ -152,3 +152,4 @@ config/neg_sampling_lr
 test.py
 test.ipynb
 repaired_*.pt
+results/

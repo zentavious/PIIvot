@@ -1,8 +1,6 @@
 import json
 import os
 import pandas as pd
-import numpy as np
-import torch
 from torch.utils.data import Dataset
 
 from eedi_piivot.utils.immutable import global_immutable
@@ -16,8 +14,6 @@ def extract_flow_message_id(row):
 def extract_flow_id(row):
     meta_data = json.loads(row['example_metadata'])
     return meta_data.get('FlowGeneratorSessionInterventionId', None)
-
-
 
 class DialogueDataset(Dataset):
     def __init__(self):
@@ -40,9 +36,13 @@ class DialogueDataset(Dataset):
 
         doccano_df = doccano_df.drop_duplicates(subset=['flow_message_id', 'flow_id', 'start_offset', 'end_offset', 'label_type']) 
 
+        # Remove unused label
+        doccano_df = doccano_df[doccano_df['label_type'] != 'racial_identifier']
+
+        self.labels = doccano_df.label_type.unique()
         # TODO find a better way to do this
-        global_immutable.LABELS_TO_IDS = {k: v for v, k in enumerate(doccano_df.label_type.unique())}
-        global_immutable.IDS_TO_LABELS = {v: k for v, k in enumerate(doccano_df.label_type.unique())}
+        global_immutable.LABELS_TO_IDS = {k: v for v, k in enumerate(self.labels)}
+        global_immutable.IDS_TO_LABELS = {v: k for v, k in enumerate(self.labels)}
 
         flow_message_ids = set(doccano_df['flow_message_id'])
         self.data = dialogue_df[dialogue_df['FlowGeneratorSessionInterventionMessageId'].isin(flow_message_ids)][['FlowGeneratorSessionInterventionId', 'FlowGeneratorSessionInterventionMessageId', 'Sequence', 'Message']].reset_index(drop=True)
@@ -52,7 +52,6 @@ class DialogueDataset(Dataset):
         for index, row in self.data.iterrows():
             corresponding_rows = doccano_df[(doccano_df['flow_message_id'] == row['FlowGeneratorSessionInterventionMessageId'])&(doccano_df['label_type'] != 'O')]
             
-            # Create a list of triples containing start_offset, end_offset, and label_type
             gt_labels_list = [(start_offset, end_offset, label_type) for start_offset, end_offset, label_type 
                             in zip(corresponding_rows['start_offset'], corresponding_rows['end_offset'], corresponding_rows['label_type'])]
             

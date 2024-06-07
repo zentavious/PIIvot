@@ -42,9 +42,10 @@ class Immutable:
             # Call the superclass __setattr__ method to avoid infinite recursion.
             super().__setattr__(name, value)
         elif name in self._dict:
-            raise ValueError(
-                f"Value for attribute {name} is already set and cannot be changed."
-            )
+            if self._dict[name] != value:
+                raise ValueError(
+                    f"Value for attribute {name} is already set and cannot be changed."
+                )
         else:
             self._dict[name] = value
 

@@ -1,7 +1,9 @@
 
 from collections import defaultdict
-from typing import Dict
+from typing import Dict, Tuple, List
 import numpy as np
+from pandas import DataFrame
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
@@ -11,6 +13,54 @@ from sklearn.metrics import (
 
 from eedi_piivot.modeling import Tracker
 from eedi_piivot.utils.immutable import global_immutable
+
+def update_history(history, cur_k_fold, cur_epoch, metrics):
+    if cur_k_fold not in history:
+        history[cur_k_fold] = {}
+    
+    if cur_epoch not in history[cur_k_fold]:
+        history[cur_k_fold][cur_epoch] = {}
+    
+    history[cur_k_fold][cur_epoch].update(metrics)
+
+def analyze_history(history):
+    max_accuracies = {}
+    max_accuracy_epochs = {}
+    min_losses = {}
+    min_loss_epochs = {}
+
+    for k, epoch in history.items():
+        accuracies = []
+        losses = []
+        
+        for cur_epoch, metrics in epoch.items():
+            accuracies.append(metrics.get('accuracy', 0))
+            losses.append(metrics.get('loss', 0))
+        
+        if accuracies and (~max_accuracies[k] or max(accuracies) > max_accuracies[k]):
+            max_accuracies[k] = max(accuracies)
+            max_accuracy_epochs[k] = epoch
+        if losses and (~min_losses[k] or  min(losses) < min_losses[k]):
+            min_losses[k] = min(losses)
+            min_loss_epochs[k] = epoch
+    
+    # Convert max accuracy and loss values to numpy arrays for mean and std calculations
+    max_accuracy_values = np.array(list(max_accuracies.values()))
+    max_loss_values = np.array(list(min_losses.values()))
+    
+    # Calculate statistics
+    stats = {
+        'max_accuracies': max_accuracies,
+        'max_accuracy_epochs': max_accuracy_epochs,
+        'min_losses': min_losses,
+        'min_loss_epochs': min_loss_epochs,
+        'mean_max_accuracy': np.mean(max_accuracy_values),
+        'std_max_accuracy': np.std(max_accuracy_values),
+        'mean_min_loss': np.mean(max_loss_values),
+        'std_min_loss': np.std(max_loss_values)
+    }
+    
+    return stats
 
 def classification_report_custom(y_true, y_pred, labels=None):
     """
@@ -25,11 +75,10 @@ def classification_report_custom(y_true, y_pred, labels=None):
         str: Text report showing the main classification metrics.
     """
 
-    # Calculate true positives, false positives, false negatives, and support for each label
-    tp = defaultdict(int)  # True positives
-    fp = defaultdict(int)  # False positives
-    fn = defaultdict(int)  # False negatives
-    support = defaultdict(int)  # Support
+    tp = defaultdict(int) 
+    fp = defaultdict(int)
+    fn = defaultdict(int)
+    support = defaultdict(int)
 
     for true, pred in zip(y_true, y_pred):
         if true == pred:
@@ -39,7 +88,6 @@ def classification_report_custom(y_true, y_pred, labels=None):
             fn[true] += 1
         support[true] += 1
 
-    # Compute precision, recall, and F1-score for each label
     precision = {}
     recall = {}
     f1_score = {}
@@ -49,12 +97,10 @@ def classification_report_custom(y_true, y_pred, labels=None):
         recall[label] = tp[label] / (tp[label] + fn[label]) if (tp[label] + fn[label]) != 0 else 0
         f1_score[label] = (2 * precision[label] * recall[label]) / (precision[label] + recall[label]) if (precision[label] + recall[label]) != 0 else 0
 
-    # Compute macro-average precision, recall, and F1-score
     macro_precision = np.mean(list(precision.values()))
     macro_recall = np.mean(list(recall.values()))
     macro_f1_score = np.mean(list(f1_score.values()))
 
-    # Build the classification report
     report = "              precision    recall  f1-score   support\n\n"
 
     for label in sorted(set(y_true + y_pred)):
@@ -71,79 +117,78 @@ def classification_report_custom(y_true, y_pred, labels=None):
 class DialogueEvaluator:
     def __init__(
         self,
-        model
+        tokenizer,
     ):
         """Class for evaluating PII predictions
-        :param model: Model to evaluate
         """
-        self.model = model
+        self.history = {}
+        self.tokenizer = tokenizer
 
     def evaluate(
         self,
+        model,
         split_name,
+        seq_len,
         eval_dataloader: DataLoader,
         tracker: Tracker = None,
         cur_epoch: int = None,
-    ) -> Dict[str, float]:
+        cur_k_fold: int = None,
+    ) -> Tuple[Dict[str, float], DataFrame]: #TODO terrible typing, this needs to be an object or something
         """Method to evaluate the model on the validation set
 
         :param eval_dataloader: Dataloader to get batches of Shape:(batch_size, 3) -> Misleading name -> evaluation_dataloader, dataloader.
 :param tracker: Tracker: a tracker class to log the loss and metrics
         :param cur_epoch: int: current epoch number before training
 
-        returns: dictionary of metrics
+        returns: dictionary of metrics and a list of mislabled datapoints
         """
-        # Panagiota's variables
-        y_pred_all = []
-        y_true_all = []
-        loss_all = 0
-
         
-        # my variables       
-        eval_loss, eval_accuracy = 0, 0
-        nb_eval_examples, nb_eval_steps = 0, 0
-        # eval_preds, eval_labels, eval_tokens = [], [], []
+        print(f"\n\n---- EVALUATION STARTING ({split_name}) ----\n\n")
+        y_pred_all, y_true_all, x_tokens_all = [], [], []
+        loss_all = 0
 
         # loss_fn = nn.CrossEntropyLoss(reduction="mean")
         eval_dataloader_len = len(eval_dataloader)
 
-        with torch.no_grad():  # Disable gradient tracking
-            self.model.eval()
+        with torch.no_grad():
+            model.eval()
 
-            for batch in eval_dataloader:  # Iterate over all evaluation batches.
+            for batch in eval_dataloader:
                 ids = batch['input_ids'].to(global_immutable.DEVICE, dtype = torch.long)
                 mask = batch['attention_mask'].to(global_immutable.DEVICE, dtype = torch.long)
                 labels = batch['labels'].to(global_immutable.DEVICE, dtype = torch.long)
                 
-                output = self.model(input_ids=ids, attention_mask=mask, labels=labels)
+                output = model(input_ids=ids, attention_mask=mask, labels=labels)
                 loss = output.loss
                 eval_logits = output.logits
                 
                 loss_all += loss.item()
 
-                # compute evaluation accuracy
-                flattened_targets = labels.view(-1) # shape (batch_size * seq_len,)
-                active_logits = eval_logits.view(-1, self.model.num_labels) # shape (batch_size * seq_len, num_labels)
-                flattened_predictions = torch.argmax(active_logits, axis=1) # shape (batch_size * seq_len,)
-                                
-                # only compute accuracy at active labels
-                active_accuracy = labels.view(-1) != -100 # shape (batch_size, seq_len)
-            
-                labels = torch.masked_select(flattened_targets, active_accuracy)
-                predictions = torch.masked_select(flattened_predictions, active_accuracy)
+                flattened_targets = labels.view(-1) # shape (batch_size * seq_len)
+                flattened_tokens = ids.view(-1)
+                active_logits = eval_logits.view(-1, model.num_labels) 
+                flattened_predictions = torch.argmax(active_logits, axis=1)
+
+                # iterate over messages in batch to identify message-level errors
+                for idx in range(0, len(flattened_targets), seq_len):
+
+                    active_accuracy = torch.zeros(len(flattened_targets), dtype=torch.bool)
+                    active_accuracy[idx:idx + seq_len] = flattened_targets[idx:idx + seq_len] != -100
                 
-                y_true_all.extend(labels.squeeze().tolist())
-                y_pred_all.extend(predictions.squeeze().tolist())
-                
-                # tmp_tr_balanced_accruacy = balanced_accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
-                # balanced_accurary_all += tmp_tr_balanced_accruacy
+                    labels = torch.masked_select(flattened_targets, active_accuracy)
+                    predictions = torch.masked_select(flattened_predictions, active_accuracy)
+                    tokens = torch.masked_select(flattened_tokens, active_accuracy)
+                    
+                    y_true_all.append(labels.tolist())
+                    y_pred_all.append(predictions.tolist())
+                    x_tokens_all.append(tokens.tolist())
             
         metrics = self.metrics_for_all_batches(
             eval_dataloader_len,
             split_name,
             loss_all,
-            y_pred_all,
-            y_true_all,
+            [pred for message_pred in y_pred_all for pred in message_pred],
+            [true for message_true in y_true_all for true in message_true],
         )
         self.log_to_tracker(
             tracker,
@@ -151,8 +196,16 @@ class DialogueEvaluator:
             cur_epoch,
             verbose=True,
         )  # save metrics to tracker
-
-        return metrics
+        errors = self.identify_errors(
+            y_pred_all,
+            y_true_all,
+            x_tokens_all,
+        )
+        
+        update_history(self.history, cur_k_fold, cur_epoch, metrics)
+        
+        print(F"---- EVALUATION FINISED ({split_name})----\n")
+        return metrics, errors
 
     def metrics_for_all_batches(
         self,
@@ -174,6 +227,27 @@ class DialogueEvaluator:
             }
         return metrics
 
+    def identify_errors(
+        self,
+        y_pred_all,
+        y_true_all,
+        x_tokens_all,
+    ) -> DataFrame:
+        
+        errors_data = {
+            'tokens': [],
+            'y_pred': [],
+            'y_true': []
+        }
+
+        for y_pred, y_true, x_tokens in zip(y_pred_all, y_true_all, x_tokens_all):
+            if y_pred != y_true:
+                errors_data['tokens'].append(self.tokenizer.convert_ids_to_tokens(x_tokens) )
+                errors_data['y_pred'].append([global_immutable.IDS_TO_LABELS[token_pred] for token_pred in y_pred])
+                errors_data['y_true'].append([global_immutable.IDS_TO_LABELS[token_true] for token_true in y_true])
+        
+        return pd.DataFrame(errors_data)
+        
     def log_to_tracker(
         self,
         tracker: Tracker,
@@ -196,3 +270,5 @@ class DialogueEvaluator:
             if verbose:
                 print(f"{k}: {v:.2f}")
         tracker.log_metrics(metrics, step=cur_epoch)
+
+    

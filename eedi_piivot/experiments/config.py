@@ -3,7 +3,7 @@
 import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, PositiveFloat, PositiveInt, confloat
+from pydantic import BaseModel, PositiveFloat, PositiveInt, confloat, validator
 
 class BatchParamsConfig(BaseModel):
     batch_size: PositiveInt
@@ -15,22 +15,25 @@ class InputDataConfig(BaseModel):
     header: bool
     processed_date: datetime.date
     split: bool
-    max_len: PositiveInt
+    k_folds: Optional[PositiveInt]
     train_split: confloat(ge=0.0, le=1.0)  # type: ignore
     train_params: BatchParamsConfig
-    valid_split: confloat(ge=0.0, le=1.0)  # type: ignore
+    valid_split: Optional[confloat(ge=0.0, le=1.0)]  # type: ignore
     valid_params: BatchParamsConfig
-    # dataset_type: DatasetTypeConfig
-    # sampler: SamplerConfig
-    # batch_size: PositiveInt
+
+    @validator('valid_split')
+    def ensure_valid_split(cls, v, values, **kwargs):
+        if v is None and values['k_folds'] is None:
+            raise KeyError('k_folds or valid_split are required')
 
 class ModelParamsConfig(BaseModel):
-    model_name: Literal["BERT"]
+    model_name: Literal["BERT", "DeBERTa"]
     from_pretrained: bool
+    max_len: PositiveInt
 
 
 class PretrainedModelParamsConfig(BaseModel):
-    pretrained_model_name_or_path: Literal["bert-base-cased"]
+    pretrained_model_name_or_path: Literal["bert-base-cased", "microsoft/deberta-v3-base"]
     num_labels: PositiveInt
 
 class ModelConfig(BaseModel):
@@ -47,7 +50,7 @@ class OptimizerConfig(BaseModel):
 class TrainerConfig(BaseModel):
     name: Literal["DialogueTrainer"]
     val_every: PositiveInt
-    epochs: PositiveInt
+    epochs: int
     use_tqdm: bool
     grad_clipping_max_norm: PositiveInt
     optimizer: OptimizerConfig

@@ -8,11 +8,14 @@ from pathlib import Path
 import torch
 from rich.prompt import Confirm
 from rich.table import Table
+from pandas import DataFrame
 
 from eedi_piivot.utils.console import console
+from eedi_piivot.utils.immutable import global_immutable
 
 CHECKPOINT_DIRNAME = "checkpoints"
-
+DATASET_DIRNAME = "datasets"
+ERRORS_DIRNAME = "model_errors"
 
 class Persistence:
     """A class to manage persistence of experiment results."""
@@ -46,7 +49,7 @@ class Persistence:
         self.resume_checkpoint_filename = resume_checkpoint_filename
         self.exp_dirname = self.get_or_set_experiment_directory(candidate_exp_dirname)
 
-    def get_or_set_experiment_directory(self, candidate_exp_dirname: str) -> str:
+    def get_or_set_experiment_directory(self, candidate_exp_dirname: str) -> Path:
         """Get or set the results directory.
 
         Args:
@@ -62,11 +65,10 @@ class Persistence:
             console.print(
                 f"Creating results directory for experiment [bold green]{candidate_exp_dirname}[/bold green]."
             )
-            (candidate_exp_dirpath / CHECKPOINT_DIRNAME).mkdir(parents=True, exist_ok=True)
-            return candidate_exp_dirname
+            candidate_exp_dirpath.mkdir(parents=True, exist_ok=True)
 
         # Case 2: Resume checkpoint exists so resume training.
-        if self.resume_checkpoint_filename:
+        elif self.resume_checkpoint_filename:
             resume_checkpoint_filepath = (
                 candidate_exp_dirpath
                 / CHECKPOINT_DIRNAME
@@ -76,63 +78,97 @@ class Persistence:
                 console.print(
                     f"Resuming experiment [bold green]{candidate_exp_dirname}[/bold green] from checkpoint {self.resume_checkpoint_filename}."
                 )
-                return candidate_exp_dirname
             else:
                 raise FileNotFoundError(
                     f"Checkpoint file {self.resume_checkpoint_filename} not found in {candidate_exp_dirpath}."
                 )
 
-        checkpoint_filepaths = glob(
-            str(candidate_exp_dirpath / CHECKPOINT_DIRNAME / "*.pt")
-        )
-
-        if checkpoint_filepaths:
-            checkpoint_filenames = [
-                Path(checkpoint_filepath).name
-                for checkpoint_filepath in checkpoint_filepaths
-            ]
-            console.print(
-                f"[bold yellow]Found existing checkpoints for experiment {candidate_exp_dirname}[/bold yellow]:"
+        else:
+            checkpoint_filepaths = glob(
+                str(candidate_exp_dirpath / CHECKPOINT_DIRNAME / "*.pt")
             )
-            table = Table(title="Existing checkpoints")
 
-            table.add_column("Index", justify="center")
-            table.add_column("Filename", justify="left")
+            if checkpoint_filepaths:
+                checkpoint_filenames = [
+                    Path(checkpoint_filepath).name
+                    for checkpoint_filepath in checkpoint_filepaths
+                ]
+                console.print(
+                    f"[bold yellow]Found existing checkpoints for experiment {candidate_exp_dirname}[/bold yellow]:"
+                )
+                table = Table(title="Existing checkpoints")
 
-            for idx, filename in enumerate(checkpoint_filenames, start=1):
-                table.add_row(str(idx), filename)
+                table.add_column("Index", justify="center")
+                table.add_column("Filename", justify="left")
 
-            console.print(table)
+                for idx, filename in enumerate(checkpoint_filenames, start=1):
+                    table.add_row(str(idx), filename)
 
-        if Confirm.ask(
-            "Do you want to override the contents of the existing directory?",
-            default=False,
-        ):
-            # Case 3: User wants to override the existing directory.
-            console.print(
-                f"Emptying results directory for experiment [bold green]{candidate_exp_dirname}[/bold green]."
-            )
-            shutil.rmtree(candidate_exp_dirpath)
-            candidate_exp_dirpath.mkdir(parents=True, exist_ok=True)
-            return candidate_exp_dirname
+                console.print(table)
 
-        # Case 4: User does not want to override the existing directory so create a new one.
-        new_exp_dirname = (
-            f"{candidate_exp_dirname}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
+            if global_immutable.YES or Confirm.ask(
+                "Do you want to override the contents of the existing directory?",
+                default=False,
+            ):
+                # Case 3: User wants to override the existing directory.
+                console.print(
+                    f"Emptying results directory for experiment [bold green]{candidate_exp_dirname}[/bold green]."
+                )
+                shutil.rmtree(candidate_exp_dirpath)
+                candidate_exp_dirpath.mkdir(parents=True, exist_ok=True)
+            
+            else:
+                # Case 4: User does not want to override the existing directory so create a new one.
+                candidate_exp_dirname = (
+                    f"{candidate_exp_dirname}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
+                )
+                console.print(
+                    f"Creating new results directory for experiment [bold green]{candidate_exp_dirname}[/bold green]."
+                )
+                candidate_exp_dirpath = self.results_dirpath / candidate_exp_dirname
+                candidate_exp_dirpath.mkdir(parents=True, exist_ok=True)
+
+        # Add within results dirs if it doesn't exist
+        if not (self.results_dirpath / candidate_exp_dirpath / CHECKPOINT_DIRNAME).exists():
+            (self.results_dirpath / candidate_exp_dirpath / CHECKPOINT_DIRNAME).mkdir(parents=True, exist_ok=True)
+        if not (self.results_dirpath / candidate_exp_dirpath / DATASET_DIRNAME).exists():
+            (self.results_dirpath / candidate_exp_dirpath / DATASET_DIRNAME).mkdir(parents=True, exist_ok=True)
+        if not (self.results_dirpath / candidate_exp_dirpath / ERRORS_DIRNAME).exists():
+            (self.results_dirpath / candidate_exp_dirpath / ERRORS_DIRNAME).mkdir(parents=True, exist_ok=True)
+
+        return candidate_exp_dirpath
+    
+    def save_errors(
+        self,
+        split_name,
+        errors: DataFrame,
+    ):
+        errors_filepath = (
+            self.results_dirpath
+            / self.exp_dirname
+            / ERRORS_DIRNAME
+            / f"{split_name}_errors.csv"
         )
-        console.print(
-            f"Creating new results directory for experiment [bold green]{new_exp_dirname}[/bold green]."
+        errors.to_csv(errors_filepath)
+    
+    def save_data(
+        self,
+        data: DataFrame,
+    ):
+        dataset_filepath = (
+            self.results_dirpath
+            / self.exp_dirname
+            / DATASET_DIRNAME
+            / "dataset.csv"
         )
-        new_exp_dirpath = self.results_dirpath / new_exp_dirname
-        new_exp_dirpath.mkdir(parents=True, exist_ok=True)
-
-        return new_exp_dirname
-
+        data.to_csv(dataset_filepath)
+        
     def save_checkpoint(
         self,
         model_state_dict: dict[str, any],
         optimizer_state_dict: dict[str, any],
         epoch: int,
+        k_fold: int,
         verbose: bool = False,
     ):
         """Save a model checkpoint.
@@ -143,7 +179,11 @@ class Persistence:
             optimizer_state_dict (dict[str, any]): The optimizer state dictionary.
             verbose (bool, optional): Whether to print verbose output. Defaults to False.
         """
-        checkpoint_filename = f"checkpoint_ep_{epoch}.pt"
+        if k_fold != 0:
+            checkpoint_filename = f"checkpoint_ep_{epoch}.pt"
+        else:
+            checkpoint_filename = f"checkpoint_k_{k_fold}_ep_{epoch}.pt"
+            
         checkpoint_filepath = (
             self.results_dirpath
             / self.exp_dirname
@@ -153,11 +193,12 @@ class Persistence:
 
         if verbose:
             console.print(
-                f"Saving model at epoch {epoch} to [bold]{checkpoint_filename}[/bold]."
+                f"Saving k {k_fold} model at epoch {epoch} to [bold]{checkpoint_filename}[/bold]."
             )
 
         checkpoint_dict = {
             "epoch": epoch,
+            "k_fold": k_fold,
             "model": model_state_dict,
             "optimizer": optimizer_state_dict,
         }

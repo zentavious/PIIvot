@@ -22,12 +22,20 @@ def main(args: argparse.Namespace) -> None:
     """
     global_immutable.DEBUG = args.debug
 
+    global_immutable.YES = args.yes
+
     global_immutable.DEVICE = (
         "cuda" if not args.use_cpu and torch.cuda.is_available() else "cpu"
     )
 
     if global_immutable.DEBUG:
         console.print(Panel("Running in DEBUG mode.", style="bold white on red"))
+    
+    if (args.use_parallelism):
+        os.environ["TOKENIZERS_PARALLELISM"] = "true"
+    else:
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
     
     config_filepaths = Path(args.exp_folder).glob("*.json")
 
@@ -60,6 +68,20 @@ if __name__ == "__main__":
         action="store_true",
         help="Use the CPU (even if a GPU is available).",
     )
+    parser.add_argument(
+        "--yes",
+        "-y",
+        default=False,
+        action="store_true",
+        help="Use 'Y' for all confirm actions.",
+    )
+    parser.add_argument(
+        "--use_parallelism",
+        default=False,
+        action="store_true",
+        help="Allow parallelism during training.",
+    )
+
 
     args = parser.parse_args()
 

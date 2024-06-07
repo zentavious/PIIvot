@@ -1,8 +1,7 @@
 """Factory for creating instances of classes based on a string identifier."""
-
 import torch
 
-from transformers import BertForTokenClassification
+from transformers import BertForTokenClassification, DebertaV2ForTokenClassification 
 
 
 def create_model(model_name: str, from_pretrained: bool = False, *args, **kwargs) -> torch.nn.Module:
@@ -17,7 +16,10 @@ def create_model(model_name: str, from_pretrained: bool = False, *args, **kwargs
     Returns:
         torch.nn.Module: An instance of the model class.
     """
-    model_classes = {"BERT": BertForTokenClassification}
+    model_classes = {
+        "BERT": BertForTokenClassification,
+        "DeBERTa": DebertaV2ForTokenClassification
+    }
 
     model_class = model_classes.get(model_name)
     if model_class is None:
