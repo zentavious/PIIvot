@@ -18,7 +18,7 @@ from eedi_piivot.modeling.DialogueEvaluator import DialogueEvaluator
 from eedi_piivot.utils.immutable import global_immutable
 from eedi_piivot.utils.console import console
 from eedi_piivot.utils.random import set_seed
-from eedi_piivot.modeling import (
+from eedi_piivot.utils.tokenizer_factory import (
     create_tokenizer,
 )
 
@@ -145,6 +145,7 @@ class Experiment:
                         valid_dataloader,
                         evaluator=evaluator,
                         num_epochs=self.config.experiment.trainer.epochs,
+                        device=global_immutable.DEVICE
                     )
 
                 print("most recent epoch", trainer._epoch)

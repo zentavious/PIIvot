@@ -14,6 +14,8 @@ from sklearn.metrics import (
 from eedi_piivot.modeling import Tracker
 from eedi_piivot.utils.immutable import global_immutable
 
+DEFAULT_DEVICE = "cpu"
+
 def update_history(history, cur_k_fold, cur_epoch, metrics):
     if cur_k_fold not in history:
         history[cur_k_fold] = {}
@@ -133,6 +135,7 @@ class DialogueEvaluator:
         tracker: Tracker = None,
         cur_epoch: int = None,
         cur_k_fold: int = None,
+        device=DEFAULT_DEVICE,
     ) -> Tuple[Dict[str, float], DataFrame]: #TODO terrible typing, this needs to be an object or something
         """Method to evaluate the model on the validation set
 
@@ -154,9 +157,9 @@ class DialogueEvaluator:
             model.eval()
 
             for batch in eval_dataloader:
-                ids = batch['input_ids'].to(global_immutable.DEVICE, dtype = torch.long)
-                mask = batch['attention_mask'].to(global_immutable.DEVICE, dtype = torch.long)
-                labels = batch['labels'].to(global_immutable.DEVICE, dtype = torch.long)
+                ids = batch['input_ids'].to(device, dtype = torch.long)
+                mask = batch['attention_mask'].to(device, dtype = torch.long)
+                labels = batch['labels'].to(device, dtype = torch.long)
                 
                 output = model(input_ids=ids, attention_mask=mask, labels=labels)
                 loss = output.loss
@@ -172,7 +175,7 @@ class DialogueEvaluator:
                 # iterate over messages in batch to identify message-level errors
                 for idx in range(0, len(flattened_targets), seq_len):
 
-                    active_accuracy = torch.zeros(len(flattened_targets), dtype=torch.bool)
+                    active_accuracy = torch.zeros(len(flattened_targets), dtype=torch.bool, device=device)
                     active_accuracy[idx:idx + seq_len] = flattened_targets[idx:idx + seq_len] != -100
                 
                     labels = torch.masked_select(flattened_targets, active_accuracy)

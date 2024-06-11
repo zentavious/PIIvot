@@ -11,9 +11,10 @@ from eedi_piivot.modeling import WandbTracker
 from eedi_piivot.modeling import DialogueEvaluator
 from eedi_piivot.utils.immutable import global_immutable
 from eedi_piivot.utils.console import console
+from eedi_piivot.utils.helpers import initialize_model_and_optimizer
 from eedi_piivot.experiments.config import ExperimentConfig
-from .model_factory import create_model
-from .optimizer_factory import create_optimizer
+from eedi_piivot.utils.model_factory import create_model
+from eedi_piivot.utils.optimizer_factory import create_optimizer
 
 repo_path = Path(__file__).resolve().parents[0]
 DEFAULT_DEVICE = "cpu"
@@ -49,20 +50,20 @@ class DialogueTrainer:
         self.tracker = tracker
         self.exp_name = exp_name
 
-    def initialize_model(self):
-        console.rule(
-            f"Initializing the {self.experiment_config.model.params.name} model."
-        )
+    # def initialize_model(self):
+    #     console.rule(
+    #         f"Initializing the {self.experiment_config.model.params.name} model."
+    #     )
         
-        self.model= create_model(self.experiment_config.model.params.name, 
-                                 self.experiment_config.model.params.from_pretrained, 
-                                 **self.experiment_config.model.pretrained_params.model_dump())
+    #     self.model= create_model(self.experiment_config.model.params.name, 
+    #                              self.experiment_config.model.params.from_pretrained, 
+    #                              **self.experiment_config.model.pretrained_params.model_dump())
         
-        self.model.to(global_immutable.DEVICE)
+    #     self.model.to(global_immutable.DEVICE)
 
-        self.optimizer = create_optimizer(self.experiment_config.trainer.optimizer.name,
-                                          self.model.parameters(),
-                                          **self.experiment_config.trainer.optimizer.params.model_dump())
+    #     self.optimizer = create_optimizer(self.experiment_config.trainer.optimizer.name,
+    #                                       self.model.parameters(),
+    #                                       **self.experiment_config.trainer.optimizer.params.model_dump())
 
     def train(
         self,
@@ -86,7 +87,10 @@ class DialogueTrainer:
         :param device: The device to use for computation
         """
 
-        self.initialize_model()
+        # self.initialize_model()
+        self.model, self.optimizer = initialize_model_and_optimizer(self.experiment_config.model,
+                                                                    self.experiment_config.trainer.optimizer,
+                                                                    global_immutable.DEVICE)
 
         errors = None
 
@@ -213,6 +217,7 @@ class DialogueTrainer:
                         val_dataloader,
                         tracker=self.tracker,
                         cur_epoch=epoch,
+                        device=device,
                     )
                 
         # return the last set of errors from valid set

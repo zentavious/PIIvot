@@ -201,6 +201,7 @@ class Persistence:
             "k_fold": k_fold,
             "model": model_state_dict,
             "optimizer": optimizer_state_dict,
+            "id_to_label": global_immutable.IDS_TO_LABELS, #TODO find a better way to store this mapping
         }
 
         torch.save(checkpoint_dict, checkpoint_filepath)

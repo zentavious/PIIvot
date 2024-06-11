@@ -64,3 +64,8 @@ class ExperimentConfig(BaseModel):
 class Config(BaseModel):
     input_data: InputDataConfig
     experiment: ExperimentConfig
+    
+class AnayzerConfig(BaseModel):
+    optimizer: OptimizerConfig
+    model: ModelConfig
+    checkpoint_path: str

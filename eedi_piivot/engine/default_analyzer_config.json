@@ -1,0 +1,20 @@
+{
+    "optimizer": {
+        "name": "Adam",
+        "params": {
+            "lr": 1e-05
+        }
+    },
+    "model": {
+        "params": {
+            "name": "BERT",
+            "from_pretrained": true,
+            "max_len": 128
+        },
+        "pretrained_params": {
+            "pretrained_model_name_or_path": "bert-base-cased",
+            "num_labels": 7
+        }
+    },
+    "checkpoint_path": "/home/ec2-user/matthewzent/Eedi-PIIvot/results/bert_base/checkpoints/checkpoint_k_0_ep_4.pt"
+}
