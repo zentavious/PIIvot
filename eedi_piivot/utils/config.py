@@ -10,21 +10,25 @@ class BatchParamsConfig(BaseModel):
     shuffle: bool
     num_workers: int
 
+class DatasetParamsConfig(BaseModel):
+    name:  Literal["BERTDialogue", "MultiSentenceBERTDialogue"]
+    augmented_non_pii: bool
+    augmented_pii: bool
+
+class DatasetConfig(BaseModel):
+    params: DatasetParamsConfig
+
 class InputDataConfig(BaseModel):
     path: str
     header: bool
     processed_date: datetime.date
     split: bool
-    k_folds: Optional[PositiveInt] = None
     train_split: confloat(ge=0.0, le=1.0)  # type: ignore
     train_params: BatchParamsConfig
-    valid_split: Optional[confloat(ge=0.0, le=1.0)]  # type: ignore
+    valid_split: confloat(ge=0.0, le=1.0)  # type: ignore
     valid_params: BatchParamsConfig
+    dataset: DatasetConfig
 
-    @field_validator('valid_split')
-    def ensure_valid_split(cls, v, values, **kwargs):
-        if v is None and values['k_folds'] is None:
-            raise KeyError('k_folds or valid_split are required')
 
 class ModelParamsConfig(BaseModel):
     name: Literal["BERT", "DeBERTa"]
@@ -65,7 +69,10 @@ class Config(BaseModel):
     input_data: InputDataConfig
     experiment: ExperimentConfig
     
-class AnayzerConfig(BaseModel):
+class AnalyzerConfig(BaseModel):
     optimizer: OptimizerConfig
     model: ModelConfig
     checkpoint_path: str
+
+class AnonymizerConfig(BaseModel):
+    open_ai_api_key: str

@@ -15,6 +15,13 @@
             "batch_size": 2,
             "shuffle": true,
             "num_workers": 0
+        },
+        "dataset": {
+            "params": {
+                "name": "MultiSentenceBERTDialogue",
+                "augmented_non_pii": false,
+                "augmented_pii": false
+            }
         }
     },
     "experiment": {
@@ -22,7 +29,7 @@
             "params": {
                 "name": "BERT",
                 "from_pretrained": true,
-                "max_len": 128
+                "max_len": 512
             },
             "pretrained_params": {
                 "pretrained_model_name_or_path": "bert-base-cased",
@@ -32,7 +39,7 @@
         "trainer": {
             "name": "DialogueTrainer",
             "val_every": 1,
-            "epochs": 4,
+            "epochs": 3,
             "use_tqdm": true,
             "grad_clipping_max_norm": 10,
             "optimizer": {

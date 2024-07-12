@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 from rich.panel import Panel
 
-from eedi_piivot.experiments import Experiment
+from eedi_piivot.modeling import Experiment
 from eedi_piivot.utils.immutable import global_immutable
 from eedi_piivot.utils.console import console
 

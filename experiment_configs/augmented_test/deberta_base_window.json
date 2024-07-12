@@ -1,6 +1,6 @@
 {
     "input_data": {
-        "path": "",
+        "path": "data/wn18rr",
         "header": false,
         "processed_date": "2024-06-07",
         "split": true,
@@ -15,24 +15,31 @@
             "batch_size": 2,
             "shuffle": true,
             "num_workers": 0
+        },
+        "dataset": {
+            "params": {
+                "name": "MultiSentenceBERTDialogue",
+                "augmented_non_pii": false,
+                "augmented_pii": false
+            }
         }
     },
     "experiment": {
         "model": {
             "params": {
-                "name": "BERT",
+                "name": "DeBERTa",
                 "from_pretrained": true,
-                "max_len": 128
+                "max_len": 512
             },
             "pretrained_params": {
-                "pretrained_model_name_or_path": "bert-base-cased",
-                "num_labels": 6
+                "pretrained_model_name_or_path": "microsoft/deberta-v3-base",
+                "num_labels": 7
             }
         },
         "trainer": {
             "name": "DialogueTrainer",
             "val_every": 1,
-            "epochs": 0,
+            "epochs": 3,
             "use_tqdm": true,
             "grad_clipping_max_norm": 10,
             "optimizer": {

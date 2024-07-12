@@ -11,7 +11,7 @@ from sklearn.metrics import (
     balanced_accuracy_score,
 )
 
-from eedi_piivot.modeling import Tracker
+from .Tracker import Tracker
 from eedi_piivot.utils.immutable import global_immutable
 
 DEFAULT_DEVICE = "cpu"

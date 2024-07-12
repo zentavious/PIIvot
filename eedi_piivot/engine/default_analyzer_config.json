@@ -16,5 +16,5 @@
             "num_labels": 7
         }
     },
-    "checkpoint_path": "/home/ec2-user/matthewzent/Eedi-PIIvot/results/bert_base/checkpoints/checkpoint_k_0_ep_4.pt"
+    "checkpoint_path": "/home/ec2-user/matthewzent/Eedi-PIIvot/results/bert_base/checkpoints/checkpoint_k_0_ep_3.pt"
 }

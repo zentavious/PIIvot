@@ -168,7 +168,6 @@ class Persistence:
         model_state_dict: dict[str, any],
         optimizer_state_dict: dict[str, any],
         epoch: int,
-        k_fold: int,
         verbose: bool = False,
     ):
         """Save a model checkpoint.
@@ -179,10 +178,7 @@ class Persistence:
             optimizer_state_dict (dict[str, any]): The optimizer state dictionary.
             verbose (bool, optional): Whether to print verbose output. Defaults to False.
         """
-        if k_fold != 0:
-            checkpoint_filename = f"checkpoint_ep_{epoch}.pt"
-        else:
-            checkpoint_filename = f"checkpoint_k_{k_fold}_ep_{epoch}.pt"
+        checkpoint_filename = f"checkpoint_ep_{epoch}.pt"
             
         checkpoint_filepath = (
             self.results_dirpath
@@ -193,12 +189,11 @@ class Persistence:
 
         if verbose:
             console.print(
-                f"Saving k {k_fold} model at epoch {epoch} to [bold]{checkpoint_filename}[/bold]."
+                f"Saving model at epoch {epoch} to [bold]{checkpoint_filename}[/bold]."
             )
 
         checkpoint_dict = {
             "epoch": epoch,
-            "k_fold": k_fold,
             "model": model_state_dict,
             "optimizer": optimizer_state_dict,
             "id_to_label": global_immutable.IDS_TO_LABELS, #TODO find a better way to store this mapping
