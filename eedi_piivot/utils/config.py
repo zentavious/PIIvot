@@ -14,6 +14,7 @@ class DatasetParamsConfig(BaseModel):
     name:  Literal["BERTDialogue", "MultiSentenceBERTDialogue"]
     augmented_non_pii: bool
     augmented_pii: bool
+    add_synthetic: bool
 
 class DatasetConfig(BaseModel):
     params: DatasetParamsConfig

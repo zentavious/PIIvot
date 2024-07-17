@@ -4,6 +4,7 @@ import datetime
 import shutil
 from glob import glob
 from pathlib import Path
+from typing import List
 
 import torch
 from rich.prompt import Confirm
@@ -141,28 +142,30 @@ class Persistence:
     def save_errors(
         self,
         split_name,
-        errors: DataFrame,
+        data_set_errors: List[DataFrame],
     ):
-        errors_filepath = (
-            self.results_dirpath
-            / self.exp_dirname
-            / ERRORS_DIRNAME
-            / f"{split_name}_errors.csv"
-        )
-        errors.to_csv(errors_filepath)
+        for i, errors in enumerate(data_set_errors):
+            errors_filepath = (
+                self.results_dirpath
+                / self.exp_dirname
+                / ERRORS_DIRNAME
+                / f"{split_name}_{i}.csv"
+            )
+            errors.to_csv(errors_filepath)
     
     def save_data(
         self,
         data: DataFrame,
+        name: str
     ):
         dataset_filepath = (
             self.results_dirpath
             / self.exp_dirname
             / DATASET_DIRNAME
-            / "dataset.csv"
+            / f"{name}.csv"
         )
         data.to_csv(dataset_filepath)
-        
+
     def save_checkpoint(
         self,
         model_state_dict: dict[str, any],

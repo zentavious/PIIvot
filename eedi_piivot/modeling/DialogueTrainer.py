@@ -205,6 +205,8 @@ class DialogueTrainer:
             # the last successful finished epoch
             self._epoch = epoch
 
+            data_set_errors = []
+
             # --- validataion
             for i, val_dataloader in enumerate(val_dataloaders):
                 if (epoch + 1) % val_frequency == 0:
@@ -217,6 +219,7 @@ class DialogueTrainer:
                             cur_epoch=epoch,
                             device=device,
                         )
+                    data_set_errors.append(errors)
                 
-        # return the last set of errors from valid set
-        return errors
+        # return the last set of errors from each valid set
+        return data_set_errors

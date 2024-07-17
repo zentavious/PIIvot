@@ -194,7 +194,7 @@ class LabelAnonymizationManager():
             return new_feedback
     
     def __init__(self,
-                 prior_mappings = {},
+                 prior_mappings = {}, #TODO remove these, and add documentation about how we could do this and why we aren't
                  distance_threshold = 1):
         
         self.prior_mappings = prior_mappings
@@ -449,11 +449,11 @@ class GPTAnonymizer():
     
     def anonymize(self, 
                   df, 
-                  data_columnes=['Message'], 
+                  data_columns=['Message'], 
                   label_columns=['label'], 
                   context_groups=['FlowGeneratorSessionInterventionId']):
         
-        for data_column, label_column in zip(data_columnes, label_columns):
+        for data_column, label_column in zip(data_columns, label_columns):
             if context_groups:
                 df = df.groupby(context_groups).apply(lambda group: self.anonymize_group(group, data_column, label_column)).reset_index(drop=True)
             else:

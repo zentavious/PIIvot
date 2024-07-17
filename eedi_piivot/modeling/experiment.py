@@ -2,12 +2,13 @@
 
 import json
 from pathlib import Path
+from typing import List
 import numpy as np
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset
 from pydantic import ValidationError
 from torch.utils.data import DataLoader
-from sklearn.model_selection import StratifiedKFold
+from torch.utils.data import Dataset
 
 from eedi_piivot.utils import Config
 from eedi_piivot.utils import Persistence
@@ -74,6 +75,16 @@ class Experiment:
 
         print(f"DEVICE: {global_immutable.DEVICE}")
 
+    def create_and_save_subset(self, dataset: Dataset, indicies: List[int], name: str) -> Subset:
+        self.persistence.save_data(dataset.data.loc[indicies][['FlowGeneratorSessionInterventionId',
+                                                               'FlowGeneratorSessionInterventionMessageId',
+                                                               'IsTutor',
+                                                               'Message',
+                                                               'Sequence',
+                                                               'label']], name)
+        return Subset(dataset, indicies)
+        
+
     def __load_data__(self):
         console.rule("Step 2: Loading the data.")
 
@@ -85,7 +96,8 @@ class Experiment:
                                       self.config.experiment.model.params.max_len, 
                                       self.tokenizer,
                                       self.config.input_data.dataset.params.augmented_non_pii,
-                                      self.config.input_data.dataset.params.augmented_pii)
+                                      self.config.input_data.dataset.params.augmented_pii,
+                                      self.config.input_data.dataset.params.add_synthetic)
         
         # map non-augmented indidices back to full_dataset 
         full_indices = np.array(full_dataset.get_non_augmented_indices())
@@ -98,30 +110,12 @@ class Experiment:
                                                     stratify=full_minority_labels)
         
         test_idx = full_indices[test_idx]
-        # TODO somethign wrong with this, it needs to be prepped for the next rain_test_split
+
         train_valid_minority_labels = full_minority_labels.iloc[train_valid_idx]
         train_valid_indices = full_indices[train_valid_idx]
 
-        # train_valid_dataset = Subset(full_dataset, train_valid_idx)
-        test_dataset = Subset(full_dataset, test_idx)
+        test_dataset = self.create_and_save_subset(full_dataset, test_idx, "test")
 
-        # train_valid_df = full_dataset.get_df_from_indicies(train_valid_idx)
-        # train_valid_labels = [train_valid_dataset.dataset.data.iloc[i].minority_label for i in train_valid_dataset.indices]
-
-        # TODO remove k folds logic
-        # if (self.config.input_data.k_folds):
-        #     kfold = StratifiedKFold(n_splits=self.config.input_data.k_folds, 
-        #                             shuffle=True, 
-        #                             random_state=global_immutable.SEED)
-             
-        #     for train_idx, val_idx in kfold.split(train_valid_dataset, train_valid_labels):
-        #         train_dataset = Subset(train_valid_dataset,train_idx)
-        #         valid_dataset = Subset(train_valid_dataset,val_idx)
-                
-        #         self.train_dataloaders.append(DataLoader(train_dataset, **self.config.input_data.train_params.dict()))
-        #         self.valid_dataloaders.append(DataLoader(valid_dataset, **self.config.input_data.valid_params.dict()))
-        # else:
-        
         train_idx, val_idx = train_test_split(np.arange(len(train_valid_indices)),
                                                     test_size=self.config.input_data.valid_split,
                                                     random_state=global_immutable.SEED,
@@ -131,11 +125,15 @@ class Experiment:
         aug_train_idx = full_dataset.expand_group_indices(train_valid_indices[train_idx])
         val_idx = train_valid_indices[val_idx]
         
-        self.train_dataloader = DataLoader(Subset(full_dataset, aug_train_idx), **self.config.input_data.train_params.model_dump())
-        self.valid_dataloaders = [DataLoader(Subset(full_dataset, val_idx), **self.config.input_data.valid_params.model_dump())]
-        if self.config.input_data.dataset.params.augmented_non_pii or self.config.input_data.dataset.params.augmented_pii:
+        synth_train_idx, synth_val_idx = full_dataset.get_synthetic_split_indices(self.config.input_data.valid_split)
+        aug_train_idx.extend(synth_train_idx)
+        
+        self.train_dataloader = DataLoader(self.create_and_save_subset(full_dataset, aug_train_idx, "train"), **self.config.input_data.train_params.model_dump())
+        self.valid_dataloaders = [DataLoader(self.create_and_save_subset(full_dataset, val_idx, "val_0"), **self.config.input_data.valid_params.model_dump())]
+        if self.config.input_data.dataset.params.augmented_non_pii or self.config.input_data.dataset.params.augmented_pii or self.config.input_data.dataset.params.add_synthetic:
             aug_val_idx = full_dataset.expand_group_indices(val_idx)
-            self.valid_dataloaders.append(DataLoader(Subset(full_dataset, aug_val_idx), **self.config.input_data.valid_params.model_dump()))
+            aug_val_idx.extend(synth_val_idx)
+            self.valid_dataloaders.append(DataLoader(self.create_and_save_subset(full_dataset, aug_val_idx, "val_1"), **self.config.input_data.valid_params.model_dump()))
         
         self.test_dataloader = DataLoader(test_dataset, **self.config.input_data.valid_params.model_dump())
 

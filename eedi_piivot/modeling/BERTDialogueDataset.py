@@ -1,11 +1,12 @@
 import json
 import os
-from typing import List
+from typing import List, Tuple
 import pandas as pd
 import numpy as np
 import torch
 from collections import Counter
 import random
+from sklearn.model_selection import train_test_split
 
 from eedi_piivot.utils.immutable import global_immutable
 from .dialogue_dataset import DialogueDataset
@@ -20,8 +21,8 @@ def extract_flow_id(row):
 
 # TODO fix dataset to add encodings + propgate labels at __getitem__??? Refer to tutorial
 class BERTDialogueDataset(DialogueDataset):
-    def __init__(self, max_length, tokenizer, augmented_nonpii, augmented_pii):
-        super().__init__(augmented_nonpii, augmented_pii)
+    def __init__(self, max_length, tokenizer, augmented_nonpii, augmented_pii, add_synthetic):
+        super().__init__(augmented_nonpii, augmented_pii, add_synthetic)
 
         self.tokenizer = tokenizer
         self.max_len = max_length
@@ -37,30 +38,55 @@ class BERTDialogueDataset(DialogueDataset):
     #     self.assign_minority_labels()
 
     def get_non_augmented_df(self):
-        if 'is_augmented' in self.data.columns:
+        if 'is_augmented' in self.data.columns and 'synthetic' in self.data.columns:
+            return self.data[(self.data['is_augmented'] == False)&(self.data['synthetic'] == False)]
+        elif 'is_augmented' in self.data.columns:
             return self.data[self.data['is_augmented'] == False]
+        elif 'synthetic' in self.data.columns:
+            return self.data[self.data['synthetic'] == False]
         else:
             return self.data
     
     
     def get_df_from_indicies(self, indices: List[int]) -> List[int]:
-        return self.data.loc[indices]
+        return self.data.iloc[indices]
         
 
     def get_non_augmented_indices(self):
-        if 'is_augmented' in self.data.columns:
-            return self.data.index[self.data['is_augmented'] == False].tolist()
+        if 'is_augmented' in self.data.columns and 'synthetic' in self.data.columns:
+            return self.data.index[(self.data['is_augmented'] == False)&(self.data['synthetic'] == False)].tolist()
+        elif 'is_augmented' in self.data.columns:
+            return self.data.index[(self.data['is_augmented'] == False)].tolist()
+        elif 'synthetic' in self.data.columns:
+            return self.data.index[(self.data['synthetic'] == False)].tolist()
         else:
             return self.data.index.tolist()
             
     def expand_group_indices(self, indices: List[int]) -> List[int]:
-        unique_ids = self.data.loc[indices, 'FlowGeneratorSessionInterventionMessageId'].unique()
+        unique_ids = self.data.iloc[indices]['FlowGeneratorSessionInterventionMessageId'].unique()
 
         # Find all indices in the DataFrame that match these FlowGeneratorSessionInterventionMessageId values
         exapanded_indices = self.data.index[self.data['FlowGeneratorSessionInterventionMessageId'].isin(unique_ids)].tolist()
         random.shuffle(exapanded_indices)
         return exapanded_indices
+    
+    def get_synthetic_split_indices(self, train_size: float) -> Tuple[List[int], List[int]]:
+        if 'synthetic' in self.data.columns:
+            synthetic_indicies = np.array(self.data.index[(self.data['synthetic'] == True)].tolist())
+            synthetic_minority_labels = self.data.iloc[synthetic_indicies]['minority_label']
 
+            synthetic_train_idx, synthetic_val_idx = train_test_split(np.arange(len(synthetic_indicies)),
+                                                                    train_size=train_size,
+                                                                    random_state=global_immutable.SEED,
+                                                                    shuffle=True,
+                                                                    stratify=synthetic_minority_labels)
+            
+            synthetic_train_idx = synthetic_indicies[synthetic_train_idx]
+            synthetic_val_idx = synthetic_indicies[synthetic_val_idx]
+
+            return synthetic_train_idx, synthetic_val_idx
+        else:
+            return [], []
 
     def assign_minority_labels(self):
         all_labels = [label for sublist in self.data['encoded_labels'] for label in sublist]
